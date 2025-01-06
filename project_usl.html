@@ -1,0 +1,240 @@
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load("yaml", "plotly", "ggplot2", "Rtsne", "htmlwidgets", "stats", 
+               "readxl", "knitr", "clustertend", "hopkins", "clustertend", 
+               "gridExtra", "factoextra", "backports", "gridExtra", "dentextend")
+setwd("C:\\Users\\majidel1\\OneDrive - Alcon\\Desktop\\UW\\Unsupervised in R")
+Dataset<-read_excel("Final project\\Data_Extract_From_Doing_Business.xlsx")
+head(Dataset)
+str(Dataset)
+summary(Dataset)
+dim(Dataset)
+#View(Dataset)
+### finding and replacing NA values with mean ###
+colSums(is.na(Dataset))
+Dataset[,c(6:12)]<-lapply(Dataset[,c(6:12)], function(x){ifelse(is.na(x), mean(x, na.rm = TRUE), x)})
+colSums(is.na(Dataset))
+## keeping only relevant columns
+str(Dataset)
+summary(Dataset)
+measures<-Dataset[6:12]
+### Z-Standardizing the Data ###
+lapply(measures, class)
+measures_z<-as.data.frame(lapply(measures, scale))
+###
+### Performing Hopkins test 
+#To begin, I will conduct prediagnostic tests to evaluate whether the data is suitable for clustering and to determine the optimal number of clusters.As part of assessing the clusterability of the data, I will compute the Hopkins statistic. The null hypothesis of this test assumes that the dataset is uniformly distributed and lacks distinct clusters.
+hopkins_stat <- hopkins(measures_z)
+print(hopkins_stat)
+#View(Dataset)
+### PCA Internal standardisation ###
+Pca_performed<-prcomp(measures_z, center = TRUE, scale. = TRUE)
+summary(Pca_performed)
+Pca_top_3<-Pca_performed$x[,1:3]
+### Plotting the explained variance ###
+plot(cumsum(Pca_performed$sdev^2 / sum(Pca_performed$sdev^2)),
+     type = "b",
+     xlab = "Number of Components",
+     ylab = "Cumulative Proportion of Variance",
+     main = "Explained Variance by Principal Components")
+### Analysing the loadings ###
+loadings<-Pca_performed$rotation[,1:3]
+print(loadings)
+### Visualization//executing the plot ###
+plot(Pca_performed, type="lines", main="scree Plot")
+### 3D Scattered ###
+Pca_rotating<-plot_ly(x=Pca_top_3[,1],
+                      y=Pca_top_3[,2],
+                      z=Pca_top_3[,3],
+                      type = "scatter3d",
+                      mode = "markers")
+Pca_rotating
+saveWidget(Pca_rotating, "3d_pca_plot.html")
+browseURL("3d_pca_plot.html")
+### Applying t-SNE ###
+tsne_data<-Pca_top_3 
+tsne_performed<-Rtsne(tsne_data, dims = 3, perplexity = 30, pca = TRUE, check_duplicates = FALSE)
+tsne_coordinates<-tsne_performed$Y
+print(tsne_coordinates)
+### t-SNE result 3D ###
+tsne_rotating<-plot_ly(x = tsne_coordinates[, 1],
+                       y = tsne_coordinates[, 2],
+                       z = tsne_coordinates[, 3],  
+                       type = "scatter3d",
+                       mode = "markers")
+tsne_rotating
+saveWidget(tsne_rotating, "3d_tsne_plot.html")
+browseURL("3d_tsne_plot.html")
+# Silhouette method for K-means
+a <- fviz_nbclust(measures_z, FUNcluster = kmeans, method = "silhouette") + theme_classic()
+b <- fviz_nbclust(measures_z, FUNcluster = cluster::pam, method = "silhouette") + theme_classic()
+c <- fviz_nbclust(measures_z, FUNcluster = cluster::clara, method = "silhouette") + theme_classic()
+d <- fviz_nbclust(measures_z, FUNcluster = hcut, method = "silhouette") + theme_classic()
+e <- fviz_nbclust(measures_z, FUNcluster = cluster::fanny, method = "silhouette") + theme_classic()
+grid.arrange(a, b, c, d, e, ncol=2)
+### k-means
+# Appling k-means clustering to the top 3 principal components
+# Perform K-means clustering on measures_z (replace with your dataset)
+cl_kmeans <- eclust(measures_z, k = 2, FUNcluster = "kmeans", hc_metric = "pearson", graph = FALSE)
+# Visualize the silhouette plot for the clustering results
+f <- fviz_silhouette(cl_kmeans)
+print(f)
+
+# Perform K-means clustering on measures_z (or your dataset)
+cl_kmeans1 <- eclust(measures_z, k = 2, FUNcluster = "kmeans", hc_metric = "euclidean", graph = FALSE)
+
+# Visualize the silhouette plot for the clustering results
+g <- fviz_silhouette(cl_kmeans1)
+print(g)
+# Perform K-means clustering on measures_z 
+cl_kmeans1 <- eclust(measures_z, k = 2, FUNcluster = "kmeans", hc_metric = "euclidean", graph = FALSE)
+
+# Silhouette plot for the clustering result
+g <- fviz_silhouette(cl_kmeans1)
+
+# Cluster visualization with convex hulls
+h <- fviz_cluster(cl_kmeans1, data = measures_z, elipse.type = "convex") + theme_minimal()
+
+# Display both plots side by side
+grid.arrange(g, h, ncol = 2)
+
+### PAM
+# Perform PAM clustering on measures_z (replace with your dataset)
+cl_pam <- eclust(measures_z, k = 2, FUNcluster = "pam", hc_metric = "pearson", graph = FALSE)
+
+# Visualize the silhouette plot for the PAM clustering results
+c <- fviz_silhouette(cl_pam)
+print(c)
+
+d <- fviz_cluster(cl_pam, data = measures_z, elipse.type = "convex") + theme_minimal()
+grid.arrange(c, d, ncol=2)
+# Heirachical clustering
+
+# Compute the distance matrix (optional if you have a dataset that can directly work with eclust)
+dm <- dist(measures_z, method = "euclidean")  # Replace measures_z with your dataset if needed
+
+# Perform hierarchical clustering on the distance matrix
+hc <- eclust(dm, k = 2, FUNcluster = "hclust", hc_metric = "euclidean", hc_method = "single")
+
+# Plot the dendrogram for the hierarchical clustering result
+plot(hc, cex = 0.6, hang = -1, main = "Dendrogram of HAC")
+
+# Add red rectangles to highlight the clusters
+rect.hclust(hc, k = 2, border = 'red')
+
+###
+# Compute the distance matrix (optional if you haven't already)
+dm <- dist(measures_z, method = "euclidean")  # Replace with your dataset if needed
+
+# Perform hierarchical clustering using complete linkage
+hc1 <- eclust(dm, k = 2, FUNcluster = "hclust", hc_metric = "euclidean", hc_method = "complete")
+
+# Plot the dendrogram
+plot(hc1, cex = 0.6, hang = -1, main = "Dendrogram of HAC")
+
+# Add red rectangles around the 3 clusters
+rect.hclust(hc1, k = 2, border = 'red')
+
+
+### Ward's method
+
+# Compute the distance matrix (optional if not already defined)
+dm <- dist(measures_z, method = "euclidean")  # Replace with your dataset if needed
+
+# Perform hierarchical clustering using Ward's D2 method
+hc3 <- eclust(dm, k = 2, FUNcluster = "hclust", hc_metric = "euclidean", hc_method = "ward.D2")
+
+# Plot the dendrogram
+plot(hc3, cex = 0.6, hang = -1, main = "Dendrogram of HAC")
+
+# Add red rectangles around the 3 clusters
+rect.hclust(hc3, k = 2, border = 'red')
+
+#### Divisive hierarchical clustering
+# Perform DIANA clustering
+hc4 <- eclust(dm, k=2, FUNcluster="diana")
+
+# Plot the dendrogram of DIANA clustering using plot()
+plot(hc4, cex = 0.6, hang = -1, main = "Dendrogram of DIANA")
+
+# Add red rectangles around the 3 clusters
+library(cluster)
+pltree(hc4, cex = 0.6, hang = -1, main = "Dendrogram of DIANA")
+rect.hclust(as.hclust(hc4), k = 3, border = 'red')
+
+
+###########################################
+# compare dendrograms by linking the labels
+# compute distance matrix
+res.dist <- dist(measures_z, method = "euclidean")
+# compute 2 hierarchical clusterings
+hc1 <- hclust(res.dist, method = "complete")
+hc2 <- hclust(res.dist, method = "ward.D2")
+# create two dendrograms(example from prof)
+dend1 <- as.dendrogram (hc1)
+dend2 <- as.dendrogram (hc2)
+install.packages("dendextend")
+library("dendextend")
+tanglegram(dend1, dend2)
+
+# optimal number of clusters - elbow
+fviz_nbclust(measures_z, FUN = hcut, method = "wss")
+################ Fuzzy Clustering ########
+### Fuzzy Clustering with FANNY ###
+# Perform FANNY clustering on measures_z
+# Ensure diss = FALSE since the dataset is not a distance matrix
+clust_fanny <- fanny(measures_z, k = 2, diss = FALSE, memb.exp = 1.2, metric = "euclidean")
+
+# Display the top 10 rows of membership values
+head(clust_fanny$membership, n = 10)
+
+# Visualize the fuzzy clustering results
+# Plot the cluster membership values
+fviz_cluster(clust_fanny, ellipse.type = "convex", repel = TRUE, geom = "point") + 
+  labs(title = "Fuzzy Clustering with FANNY", subtitle = "Membership of Data Points in Clusters") +
+  theme_minimal()
+###
+# Compute the dissimilarity matrix
+diss_matrix <- dist(measures_z, method = "euclidean")
+
+# Perform FANNY clustering with k=3 on the dissimilarity matrix
+clust_fanny1 <- fanny(diss_matrix, k = 3, diss = TRUE, memb.exp = 1.2)
+
+# Display the top 10 rows of membership values
+head(clust_fanny1$membership, n = 10)
+
+# Visualize the fuzzy clustering results ####maybe not needed
+# Display the top 10 rows of membership values
+head(clust_fanny1$membership, n = 10)
+
+# Check if the clustering results are valid for visualization
+if (!is.null(clust_fanny1$membership)) {
+  # Convert measures_z back to a data frame if needed
+  measures_z_df <- as.data.frame(measures_z)
+  
+  # Visualize the fuzzy clustering results
+  fviz_cluster(list(data = measures_z_df, cluster = clust_fanny1$clustering), 
+               ellipse.type = "convex", repel = TRUE, geom = "point") +
+    labs(title = "Fuzzy Clustering with FANNY (k=3)", 
+         subtitle = "Membership of Data Points in Clusters") +
+    theme_minimal()
+} else {
+  print("Clustering failed. Check the inputs or parameters.")
+}
+
+
+# conversion of fuzzy memberships to crisp cluster assignments (defuzzification) for clearer interpretation
+# Defuzzification - Assign each data point to the cluster with the highest membership
+cluster_assignments <- apply(clust_fanny$membership, 1, which.max)
+
+# Add the cluster assignments to the original data
+Dataset$Cluster <- cluster_assignments
+
+# Visualize the fuzzy clustering result for k = 3
+fviz_cluster(list(data = measures_z, cluster = clust_fanny1$clustering),
+             ellipse.type = "convex", repel = TRUE, geom = "point") +
+  labs(title = "Fuzzy Clustering with FANNY (k=3)", subtitle = "Membership of Data Points in Clusters") +
+  theme_minimal()
+
+
+
+ 
