@@ -8,7 +8,7 @@ pacman::p_load("yaml", "plotly", "ggplot2", "Rtsne", "htmlwidgets", "stats", "gg
                "corrplot", "psych", "dbscan")
 
 # Set working directory and load dataset
-setwd("C:\\Users\\majidel1\\OneDrive - Alcon\\Desktop\\UW\\Unsupervised in R")
+setwd("C:\\Users\\ElbekMajidovs\\Desktop\\UW\\Unsupervised in R")
 Dataset <- read_excel("2011-2021_Data_Extract_From_World_Development_Indicators.xlsx", 
                       sheet = "2017-21")
 
