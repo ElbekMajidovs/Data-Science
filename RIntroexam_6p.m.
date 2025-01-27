@@ -1,0 +1,171 @@
+setwd("C:\\Users\\Desktop\\UW")
+data <- read.csv("time_traveler_coffee_shop.csv", header = TRUE, sep = "=")
+head(data)
+id <- 474570
+set.seed(id)
+class(data)
+
+myData <- as.data.frame(data[sample(1:10000,500,replace=FALSE),])
+
+str(myData)
+
+# Currently we have 3 first variables as character type; SpentAmount as numeric; VisitTime as well as character
+# and OrderSize as integer 
+
+# Target type would be Date type for visitdate; CoffeeDetails and VisitorEra and Visitor time as  factor
+#  SpentAmount and order size would stay as it's 
+
+myData$VisitDate <- as.Date(gsub("_", "-", myData$VisitDate), format = "%d-%m-%Y")
+
+myData$CoffeeDetails <- as.factor(myData$CoffeeDetails)
+
+myData$VisitorEra <- as.factor(myData$VisitorEra)
+
+myData$VisitTime <- as.factor(myData$VisitTime)
+
+head(myData)
+View(myData)
+
+names(myData)[names(myData) == "CoffeeDetails"] <- "CoffeePreferences"
+
+head(myData)
+
+myData$CoffeeType <- sub("-.*", "", myData$CoffeePreferences)  
+myData$Temperature <- sub(".*-", "", myData$CoffeePreferences) 
+
+head(myData)
+
+sd(myData$OrderSize[myData$SpentAmount > 25])
+
+
+myData$AverageSpentPerItem <- myData$SpentAmount / myData$OrderSize
+
+head(myData)
+summary(myData)
+
+min(myData$SpentAmount[myData$VisitorEra == "Futuristic" & myData$VisitTime == "Morning"])
+
+hot_drinks <- myData$SpentAmount[myData$Temperature == "Hot"]
+iced_drinks <- myData$SpentAmount[myData$Temperature == "Iced"]
+
+par(mfrow = c(1, 2))  
+hist(hot_drinks, main = "Hot drinks", xlab = "SpentAmount", col = "navyblue")
+hist(iced_drinks, main = "Iced drinks", xlab = "SpentAmount", col = "violet")
+par(mfrow = c(1, 1))  
+
+myModel <- lm(SpentAmount ~ VisitorEra + CoffeeType + Temperature + VisitTime, data = myData)
+visit_time_coefficients <- coef(myModel)[grep("VisitTime", names(coef(myModel)))]
+visit_time_coefficients
+
+summary_table <- aggregate(
+  cbind(SpentAmount, OrderSize) ~ VisitorEra + VisitTime,
+  data = myData,
+  FUN = function(x) c(mean = mean(x), max = max(x)))
+
+summary_table$AvgerageSpent <- summary_table$SpentAmount[, "mean"]
+summary_table$MaxOrderSize <- summary_table$OrderSize[, "max"]
+
+summary_table <- summary_table[, c("VisitorEra", "VisitTime", "AvgerageSpent", "MaxOrderSize")]
+
+print(summary_table)
+
+myData$EraTypicalSpent <- ave(myData$SpentAmount, myData$VisitorEra, FUN = mean)
+
+# Bonus Task 
+
+# In order to attract underrepresented visitor Era I plan to initiate a promotinal strategy,
+# I'll offer up to 20% discount for less visited or active Era
+
+# First off starting by creating a table to check visitor distribution
+visitor_distribution <- table(myData$VisitorEra, myData$VisitTime)
+
+visitor_distribution_percent <- prop.table(visitor_distribution, margin = 2) * 100
+
+print(visitor_distribution)
+print(visitor_distribution_percent)
+
+# Let's see the average spending of each ERA
+
+era_spending <- aggregate(EraTypicalSpent ~ VisitorEra, data = myData, FUN = mean)
+
+print(era_spending)
+
+# It's easy to note that Medieval visitors during the evening and Modern visitors during both morning and evening
+# were less represented. To encourage these groups, I proposed a 20% promotional discount during these periods.
+current_distribution <- visitor_distribution_percent
+
+increase_factor <- 1.2
+
+adjusted_distribution <- current_distribution
+adjusted_distribution["Medieval", "Evening"] <- adjusted_distribution["Medieval", "Evening"] * increase_factor
+adjusted_distribution["Modern", c("Morning", "Evening")] <- adjusted_distribution["Modern", c("Morning", "Evening")] * increase_factor
+
+adjusted_distribution <- sweep(adjusted_distribution, 2, colSums(adjusted_distribution), FUN = "/") * 100
+
+# Now let's see the average spending per visitor after the discount (20% off for targeted groups)
+era_spending_adjusted <- era_spending
+era_spending_adjusted$AdjustedSpent <- era_spending_adjusted$EraTypicalSpent
+era_spending_adjusted$AdjustedSpent[era_spending_adjusted$VisitorEra == "Medieval"] <- 
+  era_spending_adjusted$EraTypicalSpent[era_spending_adjusted$VisitorEra == "Medieval"] * 0.8
+era_spending_adjusted$AdjustedSpent[era_spending_adjusted$VisitorEra == "Modern"] <- 
+  era_spending_adjusted$EraTypicalSpent[era_spending_adjusted$VisitorEra == "Modern"] * 0.8
+
+# Let's simulate the new revenue
+# Assuming that 100 visitors time of the day would visit 
+total_visits <- 100
+simulated_revenue <- data.frame(
+  VisitorEra = rownames(adjusted_distribution),
+  MorningRevenue = (adjusted_distribution[, "Morning"] / 100) * total_visits * 
+    era_spending_adjusted$AdjustedSpent,
+  EveningRevenue = (adjusted_distribution[, "Evening"] / 100) * total_visits * 
+    era_spending_adjusted$AdjustedSpent)
+
+simulated_revenue$TotalRevenue <- simulated_revenue$MorningRevenue + simulated_revenue$EveningRevenue
+
+# Let's take alook at the results
+print("Adjusted Visitor Distribution:")
+print(adjusted_distribution)
+
+print("Revenue Simulation:")
+print(simulated_revenue)
+
+
+
+# The next step I took was to simulate the impact of this strategy. I estimated how the discount would lead to 
+# increased visits (a 20% proportional increase for targeted groups). By adjusting visitor distribution
+# percentages accordingly, I calculated how this change could influence the average spending for these groups. 
+# Specifically, the spending for Medieval and Modern visitors was reduced to reflect the discount, and 
+# I estimated new revenues based on this adjusted behavior.
+
+# The results showed a potential increase in overall engagement and revenue by balancing visitor participation 
+# during off-peak times while maintaining fairness. I think my strategy aligns with both data insights 
+# distribution particularly and spending habits 
+
+# Now let's create a linear model to compare the results 
+
+myModel <- lm(SpentAmount ~ VisitorEra + CoffeeType + Temperature + VisitTime, data = myData)
+
+summary(myModel)
+
+model_coefficients <- coef(myModel)
+print(model_coefficients)
+
+myData$AdjustedSpentAmount <- myData$SpentAmount
+
+myData$AdjustedSpentAmount[myData$VisitorEra == "Medieval"] <- myData$SpentAmount[myData$VisitorEra == "Medieval"] * 0.8
+myData$AdjustedSpentAmount[myData$VisitorEra == "Modern"] <- myData$SpentAmount[myData$VisitorEra == "Modern"] * 0.8
+
+
+myData$PredictedSpent <- predict(myModel, newdata = myData)
+
+myData$PredictedAdjustedSpent <- predict(myModel, newdata = myData)
+
+head(myData[, c("SpentAmount", "AdjustedSpentAmount", "PredictedSpent", "PredictedAdjustedSpent")])
+
+
+
+# The coefficients shows us the effect of each predictor on the SpentAmount. 
+# Adjusted Spending: After applying the 20% discount, we can see how the spending for Medieval 
+# and Modern visitors decreases, but how the PredictedAdjustedSpent value is still consistent with the model,
+# allowing us to compare predicted behavior and actual discounts.
+
